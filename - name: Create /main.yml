@@ -1,0 +1,33 @@
+- name: Create / Recreate RDP User
+  shell: powershell
+  run: |
+    $ErrorActionPreference = "Stop"
+
+    # Remove user if already exists
+    if (Get-LocalUser -Name "RDP" -ErrorAction SilentlyContinue) {
+        Write-Host "User RDP already exists. Removing..."
+        Remove-LocalUser -Name "RDP"
+    }
+
+    # Generate strong password
+    Add-Type -AssemblyName System.Web
+    $password = [System.Web.Security.Membership]::GeneratePassword(20,5)
+    $securePass = ConvertTo-SecureString $password -AsPlainText -Force
+
+    # Create user
+    New-LocalUser `
+      -Name "RDP" `
+      -Password $securePass `
+      -FullName "RDP User" `
+      -Description "Temporary RDP User" `
+      -AccountNeverExpires `
+      -PasswordNeverExpires
+
+    # Add to groups (SID-based = safest)
+    Add-LocalGroupMember -SID S-1-5-32-544 -Member "RDP"   # Administrators
+    Add-LocalGroupMember -SID S-1-5-32-555 -Member "RDP"   # Remote Desktop Users
+
+    echo "RDP_USER=RDP" >> $env:GITHUB_ENV
+    echo "RDP_PASS=$password" >> $env:GITHUB_ENV
+
+    Write-Host "RDP user created successfully"
